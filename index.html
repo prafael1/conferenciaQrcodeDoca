@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conferência de Produtos</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #eef2f7;
+      color: #2d3748;
+    }
+
+    /* ---------- Topo fixo com o total (sempre visível) ---------- */
+    .topo {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #1a365d;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      transition: background .2s;
+    }
+    .topo.ok   { background: #2f855a; }
+    .topo.erro { background: #c53030; }
+
+    .topo-in {
+      max-width: 900px;
+      margin: auto;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .titulo { font-size: 16px; font-weight: 600; }
+    .total { display: flex; align-items: baseline; gap: 10px; }
+    .total .rot { font-size: 12px; letter-spacing: 1px; opacity: .85; }
+    #total { font-size: 42px; font-weight: 800; line-height: 1; }
+
+    /* ---------- Conteúdo ---------- */
+    main { max-width: 900px; margin: auto; padding: 14px; }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.07);
+      margin-bottom: 14px;
+    }
+
+    #leitura {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px;
+      border: 2px solid #3182ce;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+    #leitura:focus { outline: none; box-shadow: 0 0 0 4px rgba(49,130,206,.15); }
+
+    #status {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      text-align: center;
+      background: #edf2f7;
+      color: #4a5568;
+      word-break: break-word;
+    }
+    #status.ok   { background: #c6f6d5; color: #22543d; }
+    #status.erro { background: #fed7d7; color: #742a2a; }
+
+    /* ---------- Barra de ações ---------- */
+    .acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    button {
+      flex: 1 1 140px;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      background: #718096;
+    }
+    button.azul   { background: #3182ce; }
+    button.verde  { background: #2f855a; }
+    button.perigo { background: #e53e3e; }
+
+    .info { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #718096; }
+    .info.erro { color: #c53030; }
+    .info.ok   { color: #2f855a; }
+
+    /* ---------- Lista ---------- */
+    h2 { font-size: 16px; color: #2b6cb0; margin-bottom: 8px; }
+
+    .tabela { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #e2e8f0; font-size: 15px; vertical-align: middle; }
+    th { font-size: 12px; color: #718096; text-transform: uppercase; }
+    th.qtd, td.qtd { text-align: right; }
+    td.qtd { font-weight: 800; font-size: 20px; color: #1a365d; }
+    td.cod { font-family: Consolas, monospace; font-weight: 700; }
+    td.desc { color: #4a5568; font-size: 14px; }
+    td.desc.sem { color: #c53030; font-style: italic; }
+    .vazio { text-align: center; color: #a0aec0; padding: 20px; }
+
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      margin-left: 6px;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+    .badge.pi { background: #bee3f8; color: #2a4365; }
+    .badge.pa { background: #c6f6d5; color: #22543d; }
+
+    .aviso {
+      display: none;
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #fc8181;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .rodape { text-align: center; font-size: 12px; color: #718096; padding: 4px 0 20px; }
+
+    /* ---------- Computador ---------- */
+    @media (min-width: 700px) {
+      .topo-in { padding: 12px 16px; }
+      .titulo { font-size: 20px; }
+      #total { font-size: 64px; }
+      main { padding: 20px 14px; }
+      .card { padding: 22px; }
+      th, td { padding: 11px 12px; font-size: 16px; }
+      td.qtd { font-size: 24px; }
+      td.desc { font-size: 15px; }
+      button { flex: 0 1 auto; }
+    }
+
+    /* ---------- Celular ---------- */
+    @media (max-width: 480px) {
+      .badge { display: block; width: fit-content; margin: 4px 0 0 0; }
+      button { flex: 1 1 45%; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="topo" id="topo">
+  <div class="topo-in">
+    <div class="titulo">Conferência de Produtos</div>
+    <div class="total">
+      <span class="rot">TOTAL</span>
+      <span id="total">0</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="aviso" id="aviso">
+    ATENÇÃO: este navegador não está salvando os dados (modo anônimo ou sem espaço).
+    Se fechar a página, a contagem será perdida. Gere o PDF antes de sair.
+  </div>
+
+  <section class="card">
+    <input type="text" id="leitura" placeholder="Leia o QR Code aqui..." autocomplete="off" autofocus>
+    <div id="status">Aguardando leitura...</div>
+  </section>
+
+  <section class="card">
+    <h2 id="tituloLista">Contagem por código</h2>
+
+    <div class="acoes">
+      <button class="azul" onclick="document.getElementById('arquivo').click()">Carregar planilha</button>
+      <button class="verde" onclick="gerarPDF()">Gerar PDF</button>
+      <button onclick="desfazer()">Desfazer última</button>
+      <button class="perigo" onclick="zerar()">Zerar</button>
+    </div>
+    <input type="file" id="arquivo" accept=".xlsx,.xls,.csv" style="display:none">
+    <div class="info" id="infoProdutos"></div>
+
+    <div class="tabela">
+      <table>
+        <thead>
+          <tr><th>Código</th><th>Descrição</th><th class="qtd">QTDE</th></tr>
+        </thead>
+        <tbody id="lista"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="rodape">Os dados ficam salvos automaticamente neste aparelho, mesmo fechando a página.</p>
+</main>
+
+<script>
+  const CHAVE = "conferencia-leituras";
+  const CHAVE_PROD = "conferencia-produtos";
+
+  // ---------- Armazenamento (não perde a contagem se a página recarregar) ----------
+  function ler(chave, padrao) {
+    try {
+      const s = localStorage.getItem(chave);
+      if (s) return JSON.parse(s);
+    } catch (e) {}
+    return padrao;
+  }
+  function gravar(chave, valor) {
+    try {
+      localStorage.setItem(chave, JSON.stringify(valor));
+      return true;
+    } catch (e) {
+      armazenamentoOk = false;
+      avisoArmazenamento();
+      return false;
+    }
+  }
+
+  // Confere se o navegador realmente deixa salvar (modo anônimo ou sem espaço pode bloquear)
+  function testarArmazenamento() {
+    try {
+      localStorage.setItem("conferencia-teste", "1");
+      localStorage.removeItem("conferencia-teste");
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function avisoArmazenamento() {
+    document.getElementById("aviso").style.display = "block";
+  }
+
+  // Relê o que está salvo (garante a regra da OP única mesmo com duas abas abertas)
+  function sincronizar() {
+    if (!armazenamentoOk) return;
+    leituras = ler(CHAVE, []);
+    produtos = ler(CHAVE_PROD, {});
+  }
+
+  let armazenamentoOk = testarArmazenamento();
+
+  let leituras = ler(CHAVE, []);      // [{ op, codigo, hora }]
+  let produtos = ler(CHAVE_PROD, {}); // { "PI05308": "CAIXA BOX ..." }
+
+  // ---------- Som e aviso no topo ----------
+  let audio, timerTopo;
+
+  function bip(ok) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audio.createOscillator();
+      osc.frequency.value = ok ? 900 : 200;
+      osc.type = ok ? "sine" : "square";
+      osc.connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + (ok ? 0.12 : 0.6));
+    } catch (e) {}
+  }
+
+  function mostrar(texto, classe) {
+    const s = document.getElementById("status");
+    s.textContent = texto;
+    s.className = classe || "";
+
+    if (classe) {
+      // O topo pisca verde/vermelho: dá para ver o resultado mesmo rolando a lista
+      const t = document.getElementById("topo");
+      t.className = "topo " + classe;
+      clearTimeout(timerTopo);
+      timerTopo = setTimeout(() => { t.className = "topo"; }, 1200);
+    }
+    bip(classe === "ok");
+  }
+
+  // ---------- Leitura ----------
+  // Formato lido: N }PA}012581101034,PI05308,}CT}8,6,1
+  // (o leitor pode trazer "}" no lugar de "|", os dois funcionam)
+  function processar(texto) {
+    const t = texto.trim();
+    if (!t) return;
+    sincronizar();
+
+    const partes = t.replace(/\}/g, "|").split("|");
+
+    if (partes.length < 3 || partes[1].trim().toUpperCase() !== "PA") {
+      return mostrar("LEITURA INVÁLIDA: não é etiqueta de produto", "erro");
+    }
+
+    const campos = partes[2].split(",");
+    const op     = (campos[0] || "").trim();
+    const codigo = (campos[1] || "").trim().toUpperCase();
+
+    if (!/^\d{12}$/.test(op) || !codigo) {
+      return mostrar("LEITURA INVÁLIDA: OP ou código não encontrado", "erro");
+    }
+
+    // Regra única: a mesma OP não pode ser lida duas vezes
+    const anterior = leituras.find(l => l.op === op);
+    if (anterior) {
+      return mostrar("OP " + op + " JÁ LIDA (" + anterior.codigo + " às " + anterior.hora + ")", "erro");
+    }
+
+    leituras.push({ op, codigo, hora: new Date().toLocaleTimeString("pt-BR") });
+    gravar(CHAVE, leituras);
+    desenhar();
+    mostrar("OK: " + codigo + "  |  OP " + op, "ok");
+  }
+
+  // ---------- Contagem por código ----------
+  function contar() {
+    const contagem = {};
+    leituras.forEach(l => { contagem[l.codigo] = (contagem[l.codigo] || 0) + 1; });
+    return contagem;
+  }
+
+  function tipo(codigo) {
+    if (codigo.startsWith("PI")) return "INTERMEDIÁRIO";
+    if (codigo.startsWith("PA")) return "ACABADO";
+    return "";
+  }
+
+  // ---------- Tela ----------
+  function desenhar() {
+    document.getElementById("total").textContent = leituras.length;
+
+    const contagem = contar();
+    const codigos = Object.keys(contagem).sort();
+
+    document.getElementById("tituloLista").textContent =
+      "Contagem por código" + (codigos.length ? " (" + codigos.length + ")" : "");
+
+    const lista = document.getElementById("lista");
+    lista.innerHTML = "";
+
+    if (!codigos.length) {
+      lista.innerHTML = '<tr><td colspan="3" class="vazio">Nenhum produto lido ainda</td></tr>';
+      return;
+    }
+
+    codigos.forEach(c => {
+      const tr = document.createElement("tr");
+
+      const tdCod = document.createElement("td");
+      tdCod.className = "cod";
+      tdCod.textContent = c;
+      if (tipo(c)) {
+        const b = document.createElement("span");
+        b.className = "badge " + (c.startsWith("PI") ? "pi" : "pa");
+        b.textContent = tipo(c);
+        tdCod.appendChild(b);
+      }
+
+      const tdDesc = document.createElement("td");
+      tdDesc.className = "desc";
+      if (produtos[c]) {
+        tdDesc.textContent = produtos[c];
+      } else {
+        tdDesc.textContent = "Sem descrição cadastrada";
+        tdDesc.classList.add("sem");
+      }
+
+      const tdQtd = document.createElement("td");
+      tdQtd.className = "qtd";
+      tdQtd.textContent = contagem[c];
+
+      tr.appendChild(tdCod);
+      tr.appendChild(tdDesc);
+      tr.appendChild(tdQtd);
+      lista.appendChild(tr);
+    });
+  }
+
+  function desfazer() {
+    sincronizar();
+    if (!leituras.length) return;
+    const u = leituras[leituras.length - 1];
+    if (!confirm("Desfazer a leitura de " + u.codigo + " (OP " + u.op + ")?")) return;
+    leituras.pop();
+    gravar(CHAVE, leituras);
+    desenhar();
+    mostrar("Leitura desfeita: OP " + u.op + " liberada", "");
+  }
+
+  function zerar() {
+    sincronizar();
+    if (!leituras.length) return;
+    if (!confirm("Zerar toda a conferência? Isso apaga " + leituras.length + " leituras.")) return;
+    leituras = [];
+    gravar(CHAVE, leituras);
+    desenhar();
+    mostrar("Conferência zerada", "");
+  }
+
+  // ---------- Planilha de produtos (Produto / Descrição) ----------
+  function infoProdutos(texto, classe) {
+    const i = document.getElementById("infoProdutos");
+    i.textContent = texto;
+    i.className = "info " + (classe || "");
+  }
+
+  function atualizarInfoProdutos() {
+    const n = Object.keys(produtos).length;
+    infoProdutos(n ? n + " produtos carregados" : "Nenhuma planilha carregada", n ? "ok" : "");
+  }
+
+  function normalizar(v) {
+    return String(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  }
+
+  function importarPlanilha(arquivo) {
+    const leitor = new FileReader();
+    leitor.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "array" });
+        const linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+
+        // Procura a linha de títulos "Produto" e "Descrição" (nas 10 primeiras linhas)
+        let cabecalho = -1, colProd = -1, colDesc = -1;
+        for (let i = 0; i < Math.min(linhas.length, 10) && cabecalho < 0; i++) {
+          const nomes = linhas[i].map(normalizar);
+          const p = nomes.indexOf("produto");
+          const d = nomes.indexOf("descricao");
+          if (p >= 0 && d >= 0) { cabecalho = i; colProd = p; colDesc = d; }
+        }
+        if (cabecalho < 0) {
+          return infoProdutos('Não achei as colunas "Produto" e "Descrição" na planilha', "erro");
+        }
+
+        const novos = {};
+        for (let i = cabecalho + 1; i < linhas.length; i++) {
+          const cod  = String(linhas[i][colProd] || "").trim().toUpperCase();
+          const desc = String(linhas[i][colDesc] || "").replace(/\s+/g, " ").trim();
+          if (cod) novos[cod] = desc;
+        }
+
+        if (!Object.keys(novos).length) {
+          return infoProdutos("A planilha não tem produtos preenchidos", "erro");
+        }
+
+        produtos = novos;
+        gravar(CHAVE_PROD, produtos);
+        atualizarInfoProdutos();
+        desenhar();
+      } catch (err) {
+        infoProdutos("Não consegui ler o arquivo", "erro");
+      }
+    };
+    leitor.readAsArrayBuffer(arquivo);
+  }
+
+  document.getElementById("arquivo").addEventListener("change", e => {
+    if (e.target.files[0]) importarPlanilha(e.target.files[0]);
+    e.target.value = "";
+    document.getElementById("leitura").focus();
+  });
+
+  // ---------- PDF da conferência ----------
+  function gerarPDF() {
+    sincronizar();
+    if (!leituras.length) return mostrar("Nada para gerar: nenhum produto lido", "erro");
+    if (!window.jspdf) return mostrar("Biblioteca de PDF não carregou (verifique a internet)", "erro");
+
+    const doc = new window.jspdf.jsPDF();
+    const agora = new Date();
+    const dataHora = agora.toLocaleDateString("pt-BR") + " " + agora.toLocaleTimeString("pt-BR");
+
+    doc.setFontSize(16);
+    doc.text("Conferência de Produtos", 14, 16);
+    doc.setFontSize(10);
+    doc.text("Gerado em: " + dataHora, 14, 23);
+    doc.setFontSize(13);
+    doc.text("Total de produtos lidos: " + leituras.length, 14, 32);
+
+    // Tabela 1: contagem por código
+    const contagem = contar();
+    const corpo = Object.keys(contagem).sort().map(c =>
+      [c, produtos[c] || "Sem descrição cadastrada", contagem[c]]
+    );
+
+    doc.autoTable({
+      startY: 37,
+      head: [["Código", "Descrição", "QTDE"]],
+      body: corpo,
+      foot: [["", "TOTAL", leituras.length]],
+      headStyles: { fillColor: [43, 108, 176] },
+      footStyles: { fillColor: [26, 54, 93] },
+      columnStyles: { 0: { cellWidth: 28 }, 2: { cellWidth: 22, halign: "right" } },
+      styles: { fontSize: 9 }
+    });
+
+    // Tabela 2: OPs lidas, na ordem da leitura
+    let y = doc.lastAutoTable.finalY + 12;
+    if (y > 260) { doc.addPage(); y = 16; }
+    doc.setFontSize(12);
+    doc.text("OPs lidas", 14, y);
+
+    doc.autoTable({
+      startY: y + 3,
+      head: [["#", "OP", "Código", "Hora"]],
+      body: leituras.map((l, i) => [i + 1, l.op, l.codigo, l.hora]),
+      headStyles: { fillColor: [113, 128, 150] },
+      columnStyles: { 0: { cellWidth: 14 } },
+      styles: { fontSize: 9 }
+    });
+
+    // Número das páginas
+    const paginas = doc.getNumberOfPages();
+    for (let i = 1; i <= paginas; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text("Página " + i + " de " + paginas, 196, 290, { align: "right" });
+    }
+
+    const p2 = n => String(n).padStart(2, "0");
+    const nome = "conferencia-" + agora.getFullYear() + p2(agora.getMonth() + 1) + p2(agora.getDate()) +
+                 "-" + p2(agora.getHours()) + p2(agora.getMinutes()) + ".pdf";
+    doc.save(nome);
+    mostrar("PDF gerado: " + nome, "ok");
+  }
+
+  // ---------- Campo de leitura: o leitor digita o texto e envia Enter ----------
+  const campo = document.getElementById("leitura");
+
+  campo.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      processar(campo.value);
+      campo.value = "";
+    }
+  });
+
+  // Mantém o cursor sempre no campo para a próxima leitura
+  document.addEventListener("click", e => {
+    if (e.target.tagName !== "BUTTON") campo.focus();
+  });
+
+  // Pede ao navegador para não apagar os dados salvos quando faltar espaço
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
+
+  if (!armazenamentoOk) avisoArmazenamento();
+
+  // Se outra aba alterar a contagem, esta aba atualiza junto
+  window.addEventListener("storage", () => {
+    sincronizar();
+    atualizarInfoProdutos();
+    desenhar();
+  });
+
+  atualizarInfoProdutos();
+  desenhar();
+  campo.focus();
+</script>
+
+</body>
+</html>
